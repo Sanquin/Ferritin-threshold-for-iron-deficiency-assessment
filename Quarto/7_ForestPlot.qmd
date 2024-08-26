@@ -1,0 +1,805 @@
+---
+title: "Analysis of deltaHb - ferritin association (Forest plot)"
+format: 
+    html:
+        embed-resources: true
+---
+
+```{r}
+#| label: initalization
+
+library(tidyverse)
+library(ggplot2)
+library(patchwork)
+library(ggpubr)
+library(ggnewscale)
+library(scales)
+
+
+
+load_files <- function(file) {
+  info <- str_split(file, '[_/]', simplify=FALSE)       # country, sex
+  data <- as.data.frame(readRDS(file)) %>%
+    mutate(country = info[[1]][9],
+           sex = info[[1]][10])
+  return(data)
+}
+```
+
+```{r}
+path <- "~/Amber/FerHb/results/results_overview"
+files <- list.files(path, full.names=TRUE, recursive=T, include.dirs = F)
+datalist <- lapply(files, load_files)
+```
+
+```{r}
+#| label: make data frame with changepoints
+data <- data.frame()
+for (i in 1:length(datalist)){
+  if ((min(datalist[[i]][5, 5], datalist[[i]][5, 6]) <= 0 && 0 <= max(datalist[[i]][5, 5], datalist[[i]][5, 6]))| datalist[[i]][1,7]=="FIN"){ #here we test whether we should take the changepoint from the analysis with second slope of 0 or a different second slope based on the CI of the second slope
+    data <- rbind(data, datalist[[i]][1,])
+  } else {
+    data <- rbind(data, datalist[[i]][3,])
+  }
+}
+
+data <- data %>% dplyr::rename(mean = estimate, lower = ll, upper = ul) %>% mutate(mean = as.numeric(mean), lower = as.numeric(lower), upper=as.numeric(upper), changepoint = sprintf("%.1f (%.1f - %.1f)",mean, lower, upper)) %>% select(-measure, -`constant second slope`) %>% mutate(sex.label = tools::toTitleCase(sex), country = ifelse(country == "UK", "ENG", country), country = ifelse(country == "FI", "FIN", country), country = ifelse(country=="US", "USA", country))
+
+```
+
+```{r}
+#| label: make the results table
+resultstable <- data.frame()
+for (i in 1:length(datalist)){
+  if ((min(datalist[[i]][5, 5], datalist[[i]][5, 6]) <= 0 && 0 <= max(datalist[[i]][5, 5], datalist[[i]][5, 6])) | datalist[[i]][1,7]=="FIN"){ #here we test whether we should take the changepoint from the analysis with second slope of 0 or a different second slope based on the CI of the second slope
+    resultstable <- rbind(resultstable, datalist[[i]][1,])
+    resultstable <- rbind(resultstable, datalist[[i]][2,])
+  } else {
+    resultstable <- rbind(resultstable, datalist[[i]][3,])
+    resultstable <- rbind(resultstable, datalist[[i]][4,])
+    resultstable <- rbind(resultstable, datalist[[i]][5,])
+  }
+}
+
+resultstable <- resultstable %>% dplyr::rename(mean = estimate, lower = ll, upper = ul) %>% mutate(mean = as.numeric(mean), lower = as.numeric(lower), upper=as.numeric(upper), text = ifelse(measure=="Changepoint",(sprintf("%.1f (%.1f - %.1f)",mean, lower, upper)),(sprintf("%.2f (%.2f - %.2f)",mean, lower, upper))))  %>% dplyr::select(measure, sex, country, text)
+
+saveRDS(resultstable, file="resultstable.rds")
+```
+# Plots by sex
+## Plot males
+
+```{r}
+
+subset <- data[data$sex=="male",]
+
+p_2 <- 
+  subset |>
+  ggplot(aes(y = fct_rev(country))) + 
+  theme_classic()+
+  geom_linerange(aes(xmin=lower, xmax=upper))+
+  geom_point(aes(x=mean), shape=16, size=2, col="navyblue") +
+  labs(x="Ferritin changepoint (ng/mL)", y="")+
+  ggtitle("Males")+
+  coord_cartesian(ylim=c(1,6))+
+  scale_x_log10(limits = c(20,60),breaks=c(20, 40, 60), labels=c("20", "40", "60"))+
+  theme(axis.line.y = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        axis.ticks.y= element_blank(),
+        axis.text.y= element_blank(),
+        axis.title.y= element_blank(),
+        panel.background = element_rect(fill='transparent'),
+         plot.background = element_rect(fill='transparent', color=NA),
+         panel.grid.major = element_line(color = "lightgrey",
+                                          size = 0.1,
+                                          linetype = 2),
+         panel.grid.minor = element_line(color = "lightgrey",
+                                          size = 0.1,
+                                          linetype = 2)
+        )
+
+p_2
+
+subset2 <- rbind(subset, c(NA,NA,NA,NA,"Country", "Changepoint (95% CI)"))
+p_1 <-
+  subset2 |>
+  ggplot(aes(y = fct_rev(country)))+
+  geom_text(aes(x = 0, label = country), 
+            hjust = 0, 
+            fontface = "bold", 
+            size= ifelse(subset2$country=="Country", 2.5, 3)
+            )+
+  geom_text(
+    aes(x = 1, label = changepoint),
+    hjust = 0,
+    fontface = ifelse(subset2$changepoint == "Changepoint (95% CI)", "bold", "plain"),
+    size= ifelse(subset2$changepoint=="Changepoint (95% CI)", 2.5, 3)
+  )+
+  theme_void() +
+  coord_cartesian(xlim = c(0, 6))
+p_1
+```
+
+## Plot females
+
+```{r}
+subset <- data[data$sex=="female",]
+
+p_4 <- 
+  subset |>
+  ggplot(aes(y = fct_rev(country))) + 
+  theme_classic()+
+  geom_linerange(aes(xmin=lower, xmax=upper))+
+  geom_point(aes(x=mean), shape=16, size=2, col = "brown1") +
+  labs(x="Ferritin changepoint (ng/mL)", y="")+
+  ggtitle("Females")+
+  coord_cartesian(ylim=c(1,6))+
+  scale_x_log10(limits = c(15,60),breaks=c(20, 40, 60), labels=c("20", "40", "60"))+
+  theme(axis.line.y = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        axis.ticks.y= element_blank(),
+        axis.text.y= element_blank(),
+        axis.title.y= element_blank(),
+        panel.background = element_rect(fill='transparent'),
+         plot.background = element_rect(fill='transparent', color=NA),
+         panel.grid.major = element_line(color = "lightgrey",
+                                          size = 0.1,
+                                          linetype = 2),
+         panel.grid.minor = element_line(color = "lightgrey",
+                                          size = 0.075,
+                                          linetype = 2))
+
+p_4
+
+subset2 <- rbind(subset, c(NA,NA,NA,NA,"Country", "Changepoint (95% CI)"))
+p_3 <-
+  subset2 |>
+  ggplot(aes(y = fct_rev(country)))+
+  geom_text(
+    aes(x = 0.75, label = changepoint),
+    hjust = 0,
+    fontface = ifelse(subset2$changepoint == "Changepoint (95% CI)", "bold", "plain"),
+    size= ifelse(subset2$changepoint=="Changepoint (95% CI)", 2.5, 3)
+  )+
+  theme_void() +
+  coord_cartesian(xlim = c(-1, 1.75))
+p_3
+```
+
+## Merge MF
+
+```{r}
+layout <- c(
+  area(t = 0, l = 0, b = 10, r = 2), # left plot, starts at the top of the page (0) and goes 30 units down and 3 units to the right
+  area(t = 1, l = 2, b = 10, r = 3), # middle plot starts a little lower (t=1) because there's no title. starts 1 unit right of the left plot (l=4, whereas left plot is r=3), goes to the bottom of the page (30 units), and 6 units further over from the left plot (r=9 whereas left plot is r=3)
+  area(t = 1, l = 3, b = 10, r = 4),
+  area(t = 1, l = 5, b = 10, r = 6)
+)
+plot(layout)
+
+p_1 + p_2 + p_3 + p_4 + plot_layout(design = layout)
+
+#ggarrange(p_1,p_2,p_3,p_4, nrow=1, ncol=4)
+
+currentDate <- Sys.Date()
+FolderName <-paste0("~/Amber/FerHb/results_export/", currentDate) 
+dir.create(FolderName)
+FileName <- paste0(FolderName, "/forestplot_MF.png")
+ggsave(FileName, width=10, height=4)
+```
+
+## Plot premenopausal
+
+```{r}
+
+subset <- data[data$sex=="premenopausal",]
+
+p_2 <- 
+  subset |>
+  ggplot(aes(y = fct_rev(country))) + 
+  theme_classic()+
+  geom_linerange(aes(xmin=lower, xmax=upper))+
+  geom_point(aes(x=mean), shape=16, size=2, col="darkorchid3") +
+  labs(x="Ferritin changepoint (ng/mL)", y="")+
+  ggtitle("Premenopausal females")+
+  coord_cartesian(ylim=c(1,6))+
+  scale_x_log10(limits = c(10,60),breaks=c(10,20, 40, 60), labels=c("10","20", "40", "60"))+
+  theme(axis.line.y = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        axis.ticks.y= element_blank(),
+        axis.text.y= element_blank(),
+        axis.title.y= element_blank(),
+        panel.background = element_rect(fill='transparent'),
+         plot.background = element_rect(fill='transparent', color=NA),
+         panel.grid.major = element_line(color = "lightgrey",
+                                          size = 0.1,
+                                          linetype = 2),
+         panel.grid.minor = element_line(color = "lightgrey",
+                                          size = 0.1,
+                                          linetype = 2)
+        )
+
+p_2
+
+subset2 <- rbind(subset, c(NA,NA,NA,NA,"Country", "Changepoint (95% CI)"))
+p_1 <-
+  subset2 |>
+  ggplot(aes(y = fct_rev(country)))+
+  geom_text(aes(x = 0, label = country), 
+            hjust = 0, 
+            fontface = "bold", 
+            size= ifelse(subset2$country=="Country", 2.5, 3)
+            )+
+  geom_text(
+    aes(x = 1, label = changepoint),
+    hjust = 0,
+    fontface = ifelse(subset2$changepoint == "Changepoint (95% CI)", "bold", "plain"),
+    size= ifelse(subset2$changepoint=="Changepoint (95% CI)", 2.5, 3)
+  )+
+  theme_void() +
+  coord_cartesian(xlim = c(0, 6))
+p_1
+```
+
+## Plot postmenopausal
+
+```{r}
+subset <- data[data$sex=="postmenopausal",]
+
+p_4 <- 
+  subset |>
+  ggplot(aes(y = fct_rev(country))) + 
+  theme_classic()+
+  geom_linerange(aes(xmin=lower, xmax=upper))+
+  geom_point(aes(x=mean), shape=16, size=2, col = "chocolate2") +
+  labs(x="Ferritin changepoint (ng/mL)", y="")+
+  ggtitle("Postmenopausal females")+
+  coord_cartesian(ylim=c(1,6))+
+  scale_x_log10(limits = c(10,70),breaks=c(10, 20, 40, 60), labels=c("10","20", "40", "60"))+
+  theme(axis.line.y = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        axis.ticks.y= element_blank(),
+        axis.text.y= element_blank(),
+        axis.title.y= element_blank(),
+        panel.background = element_rect(fill='transparent'),
+         plot.background = element_rect(fill='transparent', color=NA),
+         panel.grid.major = element_line(color = "lightgrey",
+                                          size = 0.1,
+                                          linetype = 2),
+         panel.grid.minor = element_line(color = "lightgrey",
+                                          size = 0.1,
+                                          linetype = 2))
+
+p_4
+
+subset2 <- rbind(subset, c(NA,NA,NA,NA,"Country", "Changepoint (95% CI)"))
+p_3 <-
+  subset2 |>
+  ggplot(aes(y = fct_rev(country)))+
+  geom_text(
+    aes(x = 0.75, label = changepoint),
+    hjust = 0,
+    fontface = ifelse(subset2$changepoint == "Changepoint (95% CI)", "bold", "plain"),
+    size= ifelse(subset2$changepoint=="Changepoint (95% CI)", 2.5, 3)
+  )+
+  theme_void() +
+  coord_cartesian(xlim = c(-1, 1.75))
+p_3
+```
+
+## Merge pre/post
+
+```{r}
+layout <- c(
+  area(t = 0, l = 0, b = 10, r = 2), # left plot, starts at the top of the page (0) and goes 30 units down and 3 units to the right
+  area(t = 1, l = 2, b = 10, r = 3), # middle plot starts a little lower (t=1) because there's no title. starts 1 unit right of the left plot (l=4, whereas left plot is r=3), goes to the bottom of the page (30 units), and 6 units further over from the left plot (r=9 whereas left plot is r=3)
+  area(t = 1, l = 3, b = 10, r = 4),
+  area(t = 1, l = 5, b = 10, r = 6)
+)
+plot(layout)
+
+p_1 + p_2 + p_3 + p_4 + plot_layout(design = layout)
+
+#ggarrange(p_1,p_2,p_3,p_4, nrow=1, ncol=4)
+
+currentDate <- Sys.Date()
+FolderName <-paste0("~/Amber/FerHb/results_export/", currentDate) 
+dir.create(FolderName)
+FileName <- paste0(FolderName, "/forestplot_prepostF.png")
+ggsave(FileName, width=10, height=4)
+```
+# Plots by country
+## Finland
+```{r}
+
+subset <- data[data$country=="FIN",]
+
+p_2 <- 
+  subset |>
+  ggplot(aes(y = fct_relevel(sex, "postmenopausal", "premenopausal", "female", "male"))) + 
+  theme_classic()+
+  geom_linerange(aes(xmin=lower, xmax=upper))+
+  geom_point(aes(x=mean), shape=16, size=2, col="cadetblue3") +
+  labs(x="Ferritin changepoint (ng/mL)", y="")+
+  ggtitle("Finland")+
+  coord_cartesian(ylim=c(1,5))+
+  scale_x_log10(limits = c(10,70),breaks=c(10,20, 40, 60), labels=c("10","20", "40", "60"))+
+  theme(axis.line.y = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        axis.ticks.y= element_blank(),
+        axis.text.y= element_blank(),
+        axis.title.y= element_blank(),
+        panel.background = element_rect(fill='transparent'),
+         plot.background = element_rect(fill='transparent', color=NA),
+         panel.grid.major = element_line(color = "lightgrey",
+                                          size = 0.1,
+                                          linetype = 2),
+         panel.grid.minor = element_line(color = "lightgrey",
+                                          size = 0.1,
+                                          linetype = 2)
+        )
+
+p_2
+
+subset2 <- rbind(subset, c(NA,NA,NA,NA,"Sex", "Changepoint (95% CI)"))
+p_1 <-
+  subset2 |>
+  ggplot(aes(y = fct_relevel(sex, "postmenopausal", "premenopausal", "female", "male")))+
+  geom_text(aes(x = 0, label = sex.label), 
+            hjust = 0, 
+            fontface = "bold", 
+            size= ifelse(subset2$sex=="Sex", 2.5, 3)
+            )+
+  geom_text(
+    aes(x = 4, label = changepoint),
+    hjust = 0,
+    fontface = ifelse(subset2$changepoint == "Changepoint (95% CI)", "bold", "plain"),
+    size= ifelse(subset2$changepoint=="Changepoint (95% CI)", 2, 3)
+  )+
+  theme_void() +
+  coord_cartesian(xlim = c(0, 7))
+p_1
+```
+
+## Netherlands
+
+```{r}
+
+subset <- data[data$country=="NL",]
+
+p_4 <- 
+  subset |>
+  ggplot(aes(y = fct_relevel(sex, "postmenopausal", "premenopausal", "female", "male"))) + 
+  theme_classic()+
+  geom_linerange(aes(xmin=lower, xmax=upper))+
+  geom_point(aes(x=mean), shape=16, size=2, col="darkorange1") +
+  labs(x="Ferritin changepoint (ng/mL)", y="")+
+  ggtitle("The Netherlands")+
+  coord_cartesian(ylim=c(1,5))+
+  scale_x_log10(limits = c(20,60),breaks=c(20, 40, 60), labels=c("20", "40", "60"))+
+  theme(axis.line.y = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        axis.ticks.y= element_blank(),
+        axis.text.y= element_blank(),
+        axis.title.y= element_blank(),
+        panel.background = element_rect(fill='transparent'),
+         plot.background = element_rect(fill='transparent', color=NA),
+         panel.grid.major = element_line(color = "lightgrey",
+                                          size = 0.1,
+                                          linetype = 2),
+         panel.grid.minor = element_line(color = "lightgrey",
+                                          size = 0.1,
+                                          linetype = 2)
+        )
+
+p_4
+
+subset2 <- rbind(subset, c(NA,NA,NA,NA,"Sex", "Changepoint (95% CI)"))
+p_3 <-
+  subset2 |>
+  ggplot(aes(y = fct_relevel(sex, "postmenopausal", "premenopausal", "female", "male")))+
+  geom_text(
+    aes(x = 0, label = changepoint),
+    hjust = 0,
+    fontface = ifelse(subset2$changepoint == "Changepoint (95% CI)", "bold", "plain"),
+    size= ifelse(subset2$changepoint=="Changepoint (95% CI)", 2, 3)
+  )+
+  theme_void() +
+  coord_cartesian(xlim = c(-1, 1))
+p_3
+```
+## Merge FIN/NL
+```{r}
+layout <- c(
+  area(t = 0, l = 0, b = 10, r = 2), # left plot, starts at the top of the page (0) and goes 30 units down and 3 units to the right
+  area(t = 1, l = 3, b = 10, r = 4), # middle plot starts a little lower (t=1) because there's no title. starts 1 unit right of the left plot (l=4, whereas left plot is r=3), goes to the bottom of the page (30 units), and 6 units further over from the left plot (r=9 whereas left plot is r=3)
+  area(t = 1, l = 4, b = 10, r = 5),
+  area(t = 1, l = 6, b = 10, r = 7)
+)
+plot(layout)
+
+p_1 + p_2 + p_3 + p_4 + plot_layout(design = layout)
+
+#ggarrange(p_1,p_2,p_3,p_4, nrow=1, ncol=4)
+
+currentDate <- Sys.Date()
+FolderName <-paste0("~/Amber/FerHb/results_export/", currentDate) 
+dir.create(FolderName)
+FileName <- paste0(FolderName, "/forestplot_FI_NL.png")
+ggsave(FileName, width=10, height=4)
+```
+## South Africa
+```{r}
+
+subset <- data[data$country=="SA",]
+
+p_2 <- 
+  subset |>
+  ggplot(aes(y = fct_relevel(sex, "postmenopausal", "premenopausal", "female", "male"))) + 
+  theme_classic()+
+  geom_linerange(aes(xmin=lower, xmax=upper))+
+  geom_point(aes(x=mean), shape=16, size=2, col="forestgreen") +
+  labs(x="Ferritin changepoint (ng/mL)", y="")+
+  ggtitle("South Africa")+
+  coord_cartesian(ylim=c(1,5))+
+  scale_x_log10(limits = c(15,60),breaks=c(20, 40, 60), labels=c("20", "40", "60"))+
+  theme(axis.line.y = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        axis.ticks.y= element_blank(),
+        axis.text.y= element_blank(),
+        axis.title.y= element_blank(),
+        panel.background = element_rect(fill='transparent'),
+         plot.background = element_rect(fill='transparent', color=NA),
+         panel.grid.major = element_line(color = "lightgrey",
+                                          size = 0.1,
+                                          linetype = 2),
+         panel.grid.minor = element_line(color = "lightgrey",
+                                          size = 0.1,
+                                          linetype = 2)
+        )
+
+p_2
+
+subset2 <- rbind(subset, c(NA,NA,NA,NA,"Sex", "Changepoint (95% CI)"))
+p_1 <-
+  subset2 |>
+  ggplot(aes(y = fct_relevel(sex, "postmenopausal", "premenopausal", "female", "male")))+
+  geom_text(aes(x = 0, label = sex.label), 
+            hjust = 0, 
+            fontface = "bold", 
+            size= ifelse(subset2$sex=="Sex", 2.5, 3)
+            )+
+  geom_text(
+    aes(x = 4, label = changepoint),
+    hjust = 0,
+    fontface = ifelse(subset2$changepoint == "Changepoint (95% CI)", "bold", "plain"),
+    size= ifelse(subset2$changepoint=="Changepoint (95% CI)", 2, 3)
+  )+
+  theme_void() +
+  coord_cartesian(xlim = c(0, 7))
+p_1
+```
+
+## United Kingdom
+
+```{r}
+
+subset <- data[data$country=="ENG",]
+
+p_4 <- 
+  subset |>
+  ggplot(aes(y = fct_relevel(sex, "postmenopausal", "premenopausal", "female", "male"))) + 
+  theme_classic()+
+  geom_linerange(aes(xmin=lower, xmax=upper))+
+  geom_point(aes(x=mean), shape=16, size=2, col="blue4") +
+  labs(x="Ferritin changepoint (ng/mL)", y="")+
+  ggtitle("United Kingdom")+
+  coord_cartesian(ylim=c(1,5))+
+  scale_x_log10(limits = c(20,60),breaks=c(20, 40, 60), labels=c("20", "40", "60"))+
+  theme(axis.line.y = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        axis.ticks.y= element_blank(),
+        axis.text.y= element_blank(),
+        axis.title.y= element_blank(),
+        panel.background = element_rect(fill='transparent'),
+         plot.background = element_rect(fill='transparent', color=NA),
+         panel.grid.major = element_line(color = "lightgrey",
+                                          size = 0.1,
+                                          linetype = 2),
+         panel.grid.minor = element_line(color = "lightgrey",
+                                          size = 0.1,
+                                          linetype = 2)
+        )
+
+p_4
+
+subset2 <- rbind(subset, c(NA,NA,NA,NA,"Sex", "Changepoint (95% CI)"))
+p_3 <-
+  subset2 |>
+  ggplot(aes(y = fct_relevel(sex, "postmenopausal", "premenopausal", "female", "male")))+
+  geom_text(
+    aes(x = 0, label = changepoint),
+    hjust = 0,
+    fontface = ifelse(subset2$changepoint == "Changepoint (95% CI)", "bold", "plain"),
+    size= ifelse(subset2$changepoint=="Changepoint (95% CI)", 2, 3)
+  )+
+  theme_void() +
+  coord_cartesian(xlim = c(-1, 1))
+p_3
+```
+## Merge SA/ENG
+```{r}
+layout <- c(
+  area(t = 0, l = 0, b = 10, r = 2), # left plot, starts at the top of the page (0) and goes 30 units down and 3 units to the right
+  area(t = 1, l = 3, b = 10, r = 4), # middle plot starts a little lower (t=1) because there's no title. starts 1 unit right of the left plot (l=4, whereas left plot is r=3), goes to the bottom of the page (30 units), and 6 units further over from the left plot (r=9 whereas left plot is r=3)
+  area(t = 1, l = 4, b = 10, r = 5),
+  area(t = 1, l = 6, b = 10, r = 7)
+)
+plot(layout)
+
+p_1 + p_2 + p_3 + p_4 + plot_layout(design = layout)
+
+#ggarrange(p_1,p_2,p_3,p_4, nrow=1, ncol=4)
+
+currentDate <- Sys.Date()
+FolderName <-paste0("~/Amber/FerHb/results_export/", currentDate) 
+dir.create(FolderName)
+FileName <- paste0(FolderName, "/forestplot_SA_ENG.png")
+ggsave(FileName, width=10, height=4)
+```
+
+
+## United States
+
+```{r}
+
+subset <- data[data$country=="USA",]
+
+p_2 <- 
+  subset |>
+  ggplot(aes(y = fct_relevel(sex, "postmenopausal", "premenopausal", "female", "male"))) + 
+  theme_classic()+
+  geom_linerange(aes(xmin=lower, xmax=upper))+
+  geom_point(aes(x=mean), shape=16, size=2, col="brown3") +
+  labs(x="Ferritin changepoint (ng/mL)", y="")+
+  ggtitle("United States")+
+  coord_cartesian(ylim=c(1,5))+
+  #coord_trans(x="log10") + 
+  #xlim(20,40)+
+  scale_x_log10(limits = c(20,60),breaks=c(20, 40, 60), labels=c("20", "40", "60"))+
+  theme(axis.line.y = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        axis.ticks.y= element_blank(),
+        axis.text.y= element_blank(),
+        axis.title.y= element_blank(),
+        panel.background = element_rect(fill='transparent'),
+         plot.background = element_rect(fill='transparent', color=NA),
+         panel.grid.major = element_line(color = "lightgrey",
+                                          size = 0.1,
+                                          linetype = 2),
+         panel.grid.minor = element_line(color = "lightgrey",
+                                          size = 0.1,
+                                          linetype = 2)
+        )
+
+p_2
+
+subset2 <- rbind(subset, c(NA,NA,NA,NA,"Sex", "Changepoint (95% CI)"))
+p_1 <-
+  subset2 |>
+  ggplot(aes(y = fct_relevel(sex, "postmenopausal", "premenopausal", "female", "male")))+
+  geom_text(aes(x = 0, label = sex.label), 
+            hjust = 0, 
+            fontface = "bold", 
+            size= ifelse(subset2$sex=="Sex", 2.5, 3)
+            )+
+  geom_text(
+    aes(x = 4, label = changepoint),
+    hjust = 0,
+    fontface = ifelse(subset2$changepoint == "Changepoint (95% CI)", "bold", "plain"),
+    size= ifelse(subset2$changepoint=="Changepoint (95% CI)", 2, 3)
+  )+
+  theme_void() +
+  coord_cartesian(xlim = c(0, 7))
+p_1
+```
+## Merge USA
+```{r}
+layout <- c(
+  area(t = 0, l = 0, b = 10, r = 2), # left plot, starts at the top of the page (0) and goes 30 units down and 3 units to the right
+  area(t = 1, l = 3, b = 10, r = 4) # middle plot starts a little lower (t=1) because there's no title. starts 1 unit right of the left plot (l=4, whereas left plot is r=3), goes to the bottom of the page (30 units), and 6 units further over from the left plot (r=9 whereas left plot is r=3)
+
+)
+plot(layout)
+
+p_1 + p_2 + plot_layout(design = layout)
+
+#ggarrange(p_1,p_2,p_3,p_4, nrow=1, ncol=4)
+
+currentDate <- Sys.Date()
+FolderName <-paste0("~/Amber/FerHb/results_export/", currentDate) 
+dir.create(FolderName)
+FileName <- paste0(FolderName, "/forestplot_US.png")
+ggsave(FileName, width=6, height=4)
+```
+
+# Plots by country and sex
+
+```{r}
+
+test <- data.frame(t(data.frame(c(NA,-100,-100,-100,"NL","  ", NA),c(NA,-100,-100,-100,"SA","  ", NA),c(NA,-100,-100,-100,"ENG","  ", NA),c(NA,-100,-100,-100,"USA","  ", NA))))
+colnames(test) <- c("sex", "mean", "lower", "upper", "country", "changepoint", "sex.label")
+data2 <- rbind(data, test) %>% mutate(mean = as.numeric(mean), upper=as.numeric(upper), lower=as.numeric(lower))
+data2$n <- c("3,457","3,462", "1,590", "1,867", "217,144", "196,595", "78,521", "138,623", "196,082", "205,195", "46,714", "149,368", "19,697", "20,975", "9,084", "10,613", "100,616", "65,052","23,946", "76,670", NA, NA, NA, NA)
+
+p_2 <- 
+  data2 |>
+  ggplot(aes(y = fct_relevel(country, "USA", "ENG", "SA", "NL", "FIN"))) + 
+  theme_classic()+
+  geom_linerange(aes(xmin=lower, xmax=upper, col = fct_relevel(sex.label, "Postmenopausal", "Premenopausal", "Female", "Male")), position = position_dodge(1))+
+  scale_colour_manual('Sex', values = c("black", "black", "black", "black"), na.translate=F, breaks = c("Male", "Female", "Premenopausal", "Postmenopausal"))+
+  ggnewscale::new_scale_color()+
+  geom_point(aes(x=mean, col = fct_relevel(sex.label, "Postmenopausal", "Premenopausal", "Female", "Male"), shape =fct_relevel(sex.label, "Postmenopausal", "Premenopausal", "Female", "Male")), size=1.5, position = position_dodge(1)) +
+  scale_colour_manual('Sex', values = c("navyblue", "brown1", "darkorchid3", "chocolate2"), na.translate=F, breaks = c("Male", "Female", "Premenopausal", "Postmenopausal"))+
+  scale_shape_manual('Sex', values = c(15,16,17,4), na.translate=F, breaks = c("Male", "Female", "Premenopausal", "Postmenopausal"))+
+  labs(x="Ferritin changepoint (ng/mL, logarithmic scale)", y="")+
+  ggtitle("Changepoint in Ferritin ~ delta Hb association")+
+  coord_cartesian(ylim=c(1,6))+
+  scale_x_log10(limits = c(14,70),breaks=c(20, 40, 60, 70), labels=c("20", "40", "60", "70"))+
+  labs(fill='Sex', shape = 'Sex') +
+  theme(legend.text = element_text(size=6),
+        legend.title = element_text(size=8),
+        legend.key.size = unit(0.5, 'cm'),
+        axis.line.y = element_blank(),
+        plot.title = element_text(hjust = 0.3),
+        axis.ticks.y= element_blank(),
+        axis.text.y= element_blank(),
+        axis.title.y= element_blank(),
+        panel.background = element_rect(fill='transparent'),
+         plot.background = element_rect(fill='transparent', color=NA),
+         panel.grid.major = element_line(color = "lightgrey",
+                                          size = 0.1,
+                                          linetype = 2),
+         panel.grid.minor = element_line(color = "lightgrey",
+                                          size = 0.1,
+                                          linetype = 2)
+        )
+
+p_2
+
+subset <- data[data$sex=="male",]
+subset2 <- rbind(subset, c(NA,NA,NA,NA,"Country", "Changepoint (95% CI)"))
+subset3 <-  rbind(data2, c(NA,NA,NA,NA, "Country", "Changepoint (95% CI)", "Male", "N (donations)"))
+
+p_1 <-
+  subset3 |>
+  ggplot(aes(y = fct_relevel(country, "USA", "ENG", "SA", "NL", "FIN", "Country")))+
+  geom_text(aes(x = 1.7, label = country,col=fct_relevel(sex.label, "Postmenopausal", "Premenopausal", "Female", "Male")), 
+            hjust = 0, 
+            fontface = "bold", 
+            size= ifelse(subset3$country=="Country", 2.5, 3),
+            position = position_dodge(1)
+            )+
+  guides(col = 'none') + 
+  scale_colour_manual('Sex', values = c("white", "white", "white", "black"), na.value = "white")+
+  ggnewscale::new_scale_color()+
+  geom_text(data = subset3, 
+    aes(x = 3, label = changepoint, col = fct_relevel(sex.label, "Postmenopausal", "Premenopausal", "Female", "Male")),
+    position = position_dodge(1),
+    hjust = 0,
+    fontface = ifelse(subset3$changepoint == "Changepoint (95% CI)", "bold", "plain"),
+    size= ifelse(subset3$changepoint=="Changepoint (95% CI)", 2, 3)
+  )+
+  scale_colour_manual('Sex', values = c("black", "black", "black", "black"), na.value = "black")+
+  geom_text(data = subset3, 
+    aes(x = 6, label = n, col = fct_relevel(sex.label, "Postmenopausal", "Premenopausal", "Female", "Male")),
+    position = position_dodge(1),
+    hjust = 0,
+    fontface = ifelse(subset3$changepoint == "Changepoint (95% CI)", "bold", "plain"),
+    size= ifelse(subset3$changepoint=="Changepoint (95% CI)", 2, 3)
+  )+
+  scale_colour_manual('Sex', values = c("black", "black", "black", "black"), na.value = "black")+
+  theme_void() +
+  guides(col = 'none', shape = 'none') + 
+  coord_cartesian(xlim = c(0, 7))
+p_1
+
+layout <- c(
+  area(t = 0, l = 0, b = 10, r = 2), # left plot, starts at the top of the page (0) and goes 30 units down and 3 units to the right
+  area(t = 1, l = 3, b = 10, r = 4) # middle plot starts a little lower (t=1) because there's no title. starts 1 unit right of the left plot (l=4, whereas left plot is r=3), goes to the bottom of the page (30 units), and 6 units further over from the left plot (r=9 whereas left plot is r=3)
+
+)
+plot(layout)
+
+p_1 + p_2 + plot_layout(design = layout)
+
+#ggarrange(p_1,p_2,p_3,p_4, nrow=1, ncol=4)
+
+currentDate <- Sys.Date()
+FolderName <-paste0("~/Amber/FerHb/results_export/", currentDate) 
+dir.create(FolderName)
+FileName <- paste0(FolderName, "/forestplot_complete.png")
+ggsave(FileName, width=9, height=5)
+```
+# Plots by sex and country
+
+```{r}
+
+test <- data.frame(t(data.frame(c("female",10,10,10,NA,"  ", NA),c("premenopausal",10,10,10,NA,"  ", NA),c("postmenopausal",10,10,10,NA,"  ", NA))))
+colnames(test) <- c("sex", "mean", "lower", "upper", "country", "changepoint", "sex.label")
+data3 <- rbind(data, test) %>% mutate(mean = as.numeric(mean), upper=as.numeric(upper), lower=as.numeric(lower))
+p_2 <- 
+  data3 |>
+  ggplot(aes(y = fct_relevel(sex, "postmenopausal", "premenopausal", "female", "male"))) + 
+  theme_classic()+
+  geom_linerange(aes(xmin=lower, xmax=upper, col = fct_relevel(country, "USA", "ENG", "SA", "NL", "FIN")), position = position_dodge(1))+
+  scale_colour_manual('Country', values = c("black", "black", "black", "black", "black"), na.translate=F, breaks = c("FIN", "NL", "SA", "ENG", "USA"))+
+  ggnewscale::new_scale_color()+
+  geom_point(aes(x=mean, col = fct_relevel(country, "USA", "ENG", "SA", "NL", "FIN")), shape=16, size=1.5, position = position_dodge(1)) +
+  scale_colour_manual('Country', values = c("cadetblue3", "darkorange1", "forestgreen", "blue4", "brown3"), na.translate=F, breaks = c("FIN", "NL", "SA", "ENG", "USA"))+
+  labs(x="Ferritin changepoint (ng/mL)", y="")+
+  ggtitle("Changepoint in Ferritin ~ dHb association")+
+  coord_cartesian(ylim=c(1,5))+
+  scale_x_log10(limits = c(14,70),breaks=c(20, 40, 60, 70), labels=c("20", "40", "60", "70"))+
+  #labs(fill='Sex') +
+  theme(axis.line.y = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        axis.ticks.y= element_blank(),
+        axis.text.y= element_blank(),
+        axis.title.y= element_blank(),
+        panel.background = element_rect(fill='transparent'),
+         plot.background = element_rect(fill='transparent', color=NA),
+         panel.grid.major = element_line(color = "lightgrey",
+                                          size = 0.1,
+                                          linetype = 2),
+         panel.grid.minor = element_line(color = "lightgrey",
+                                          size = 0.1,
+                                          linetype = 2)
+        )
+
+p_2
+
+
+subset4 <-  rbind(data3, c("Sex",NA,NA,NA, "FIN", "Changepoint (95% CI)", "Sex"))
+
+p_1 <-
+  subset4 |>
+  ggplot(aes(y = fct_relevel(sex, "postmenopausal", "premenopausal", "female", "male", "Sex")))+
+  geom_text(aes(x = 0, label = sex.label, col=fct_relevel(country, "USA", "ENG", "SA", "NL", "FIN")), 
+            hjust = 0, 
+            fontface = "bold", 
+            size= ifelse(subset4$sex.label=="Sex", 2.5, 3),
+            position = position_dodge(1)
+            )+
+  guides(col = 'none') + 
+  scale_colour_manual('Country', values = c("white", "white", "white","white", "black"), na.value = "white")+
+  ggnewscale::new_scale_color()+
+  geom_text(data = subset4, 
+    aes(x = 4, label = changepoint, col=fct_relevel(country, "USA", "ENG", "SA", "NL", "FIN")),
+    position = position_dodge(1),
+    hjust = 0,
+    fontface = ifelse(subset4$changepoint == "Changepoint (95% CI)", "bold", "plain"),
+    size= ifelse(subset4$changepoint=="Changepoint (95% CI)", 2, 3)
+  )+
+  scale_colour_manual('Country', values = c("black", "black", "black", "black", "black", "black"), na.value = "black")+
+  theme_void() +
+  guides(col = 'none') + 
+  coord_cartesian(xlim = c(0, 7))
+p_1
+
+layout <- c(
+  area(t = 0, l = 0, b = 10, r = 2), # left plot, starts at the top of the page (0) and goes 30 units down and 3 units to the right
+  area(t = 1, l = 3, b = 10, r = 4) # middle plot starts a little lower (t=1) because there's no title. starts 1 unit right of the left plot (l=4, whereas left plot is r=3), goes to the bottom of the page (30 units), and 6 units further over from the left plot (r=9 whereas left plot is r=3)
+
+)
+plot(layout)
+
+p_1 + p_2 + plot_layout(design = layout)
+
+#ggarrange(p_1,p_2,p_3,p_4, nrow=1, ncol=4)
+
+currentDate <- Sys.Date()
+FolderName <-paste0("~/Amber/FerHb/results_export/", currentDate) 
+dir.create(FolderName)
+FileName <- paste0(FolderName, "/forestplot_complete2.png")
+ggsave(FileName, width=6, height=5)
+```

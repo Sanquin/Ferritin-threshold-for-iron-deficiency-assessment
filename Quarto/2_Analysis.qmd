@@ -1,0 +1,408 @@
+---
+title: "Analysis of deltaHb - ferritin association"
+format: 
+    html:
+        embed-resources: true
+---
+
+# Initialization
+
+## Load packages
+
+```{r}
+#| label: libraries
+#| code-fold: true
+#| code-summary: Libraries
+#| message: false
+#| warning: false
+
+
+# library("Hmisc")
+library("zoo")
+# library("mcp") # for bayesian changepoint analysis
+# library("rjags")
+library("pracma")
+library("scales")
+library("dplyr")
+library(ggplot2)
+library(hexbin)
+library(ggExtra)
+library("stringr")
+```
+
+## Directories
+
+In this part of the code we ask you to define:
+
+-   Your main directory (in which we will create a subdirectory for the bootstrap results and where the functions file is located)
+-   Your data file
+-   The folder to which we export results (more on this later in the document)
+
+```{r}
+#| label: define directory and data file
+#define your main directory
+
+main_dir <- "~/code/Associatie_FerHb" #define your main directory 
+FileToUse<-"~/code/data/dataset7.rds" #define the dataset file you want to use for the analysis (1 of 6 datasets we agreed on)
+export_folder <- "results_export" #define the name of the folder you want to export you results to
+```
+
+```{r}
+#| label: create directories & load data + functions
+#| code-fold: true
+setwd(main_dir)  
+# setting up the sub directory for bootstrap results and a folder with today's date
+sub_dir <- "bootstrap_results/"
+currentDate <- Sys.Date()
+
+# check if sub directory already exists, otherwise create it 
+if (file.exists(sub_dir)){
+      print("The folder for bootstrap results already exists")
+} else {
+        # create a new sub directory inside
+        # the main path
+        dir.create(file.path(main_dir, sub_dir))
+}
+
+#check if the folder for today's bootstrap results already exists, otherwise create it
+if (file.exists(file.path(sub_dir,currentDate))){
+      print("Today's sub folder already exists")
+} else {
+        # create a new sub directory inside
+        # the main path
+        dir.create(file.path(main_dir, sub_dir,currentDate))
+}
+
+#check if the folder for result export already exists, otherwise create it
+if (file.exists(export_folder)){
+      print("The folder for the result export already exists")
+} else {
+        # create a new sub directory inside
+        # the main path
+        dir.create(file.path(main_dir, export_folder))
+}
+
+
+if (file.exists(file.path(export_folder, currentDate))){
+      print("Today's sub folder already exists")
+} else {
+        # create a new sub directory inside
+        # the main path
+        dir.create(file.path(main_dir, export_folder,currentDate))
+}
+
+FolderDataset <- str_split_i(FileToUse, "/", -1)
+FolderDataset <- gsub('.rds', '', FolderDataset)
+
+if (file.exists(file.path(export_folder, currentDate, FolderDataset))){
+      print("A sub folder with this time stamp already exists")
+} else {
+        # create a new sub directory inside
+        # the main path
+        dir.create(file.path(main_dir, export_folder,currentDate, FolderDataset))
+}
+
+data<-readRDS(FileToUse)
+if(!is.factor(data$Geslacht)){data$Geslacht<-as.factor(data$Geslacht)}
+
+```
+
+## Parameters
+
+Here you have to define some parameters:
+
+```{r}
+#| label: base parameters
+#| code-fold: false
+#| code-summary: parameters
+#| message: false
+#| warning: false
+
+#load the functions needed
+source(file.path(main_dir, "1_Functions.R"))
+
+#second segment of line
+
+#plotting and analysis
+menopausal_status <- T # indicate whether you want to additionally split the females by their menopausal status
+
+#simulation
+# dobayes<-F         # Indicate whether you want to perform a bayesian changepoint analysis (recommended: F)
+dobootstrap<-T     # Indicate whether you want to perform a bootstrap of the max likelihood estimate for the changepoint (recommended: T)
+printbootstrap<-T  # Indicate whether you want to print the bootstrap results. For readable quarto files this is not recommended (recommended: F) 
+bsseed<-11          # seedvalue for the bootstrap
+bootstrapsamples <- 1000 #number of bootstrap samples (recommended: 1000)
+
+rollmean_nr<-1000  # nr of samples to use in the rolling mean
+geompoint_transparency <- 0.05 
+
+
+#exporting results
+export_files <- F # Indicate whether you want to export the results of the analysis
+proportion <- 0.03 # proportion of your data that you will export. This really depends on how big your data is. We recommend a proportion that will still display the pattern/direction of the data.
+
+
+
+#second slope is set to constant by default
+#std is set to constant by default, by this function
+#which also sets p0 and ul, ll
+set_constant_slope_std(T, T)
+
+```
+
+::: {.callout-important appearance="simple"}
+## A note on exporting results
+
+Only jittered values or values derived from analyses are exported.
+
+When exporting the data, the dRefHb value and lFer variables are jittered, all the original values are removed before exporting. Original values are removed from the results of the analysis when exporting. Only the result of the analysis is exported
+
+We export the results so we can, ultimately, combine results from all countries in one graph.
+:::
+
+# Changepoint analysis (CONSTANT)
+
+```{r, fig.width=7, fig.height=7}
+#| label: changepoint analysis
+#| code-fold: true
+#| code-summary: analysis
+#| message: false
+#| warning: false
+
+### set male dataset for reference
+constant_vals<-c(TRUE,FALSE)
+
+for(constant_slope_val in constant_vals){
+  for(constant_std_val in constant_vals){
+    #set here constant slope/std
+    set_constant_slope_std(constant_slope_val, constant_std_val)
+    print("-------------")
+    print(paste("Constant slope", constant_slope, "Constant std", constant_std))
+    print('-------------')
+    print("Males")
+    refdata<-select_males_only()
+    refdata<-refdata[order(refdata$lFer),] # order data by lFer
+    refdataM<-refdata
+    fitdata<-refdata
+    title=paste0("Male donors (n=", nrow(refdataM),")", sep="")
+    #Don't like this but not sure how else to approach
+    #first c means constant slope, second c means constant std
+    #fit values are stored in these vectors
+    if(constant_slope & constant_std){
+      pfit_male_constant_slope_constant_std <- plotHbFer()
+    }else if (constant_slope & ! constant_std){
+      pfit_male_constant_slope_fit_std <-plotHbFer()
+    } else if (!constant_slope & constant_std){
+      pfit_male_fit_slope_constant_std <- plotHbFer()
+    } else if (! constant_slope & ! constant_std){
+      pfit_male_fit_slope_fit_std <- plotHbFer()
+    }
+
+    if(export_files){
+      print("Exporting files")
+      exportData(refdataM)
+      exportRollmean(rollmean_data)
+      exportSolution(sol_data)
+      }
+
+    print("Females")
+    ### set female dataset for reference
+    refdata<-select_females_only()
+    refdata<-refdata[order(refdata$lFer),] # order data by lFer
+    refdataF<-refdata
+    fitdata<-refdata
+    title=paste0("Female donors (n=", nrow(refdataF), ")", sep="")
+    if(constant_slope & constant_std){
+      pfit_female_constant_slope_constant_std <- plotHbFer()
+    }else if (constant_slope & ! constant_std){
+      pfit_female_constant_slope_fit_std <-plotHbFer()
+    } else if (!constant_slope & constant_std){
+      pfit_female_fit_slope_constant_std <- plotHbFer()
+    } else if (! constant_slope & ! constant_std){
+      pfit_female_fit_slope_fit_std <- plotHbFer()
+    }
+    if(export_files){
+      exportData(refdataF)
+      exportRollmean(rollmean_data)
+      exportSolution(sol_data)}
+
+    if(menopausal_status){
+    ## set premenopausal female dataset for reference
+    refdata<-select_premenopausal_only()
+    refdata<-refdata[order(refdata$lFer),] # order data by lFer
+    refdatapreF<-refdata
+    fitdata<-refdata
+    title=paste0("Premenopausal donors (n=", nrow(refdatapreF), ")", sep="")
+    print("Premenopausal")
+    if(constant_slope & constant_std){
+      pfit_premenop_constant_slope_constant_std <- plotHbFer()
+    }else if (constant_slope & ! constant_std){
+      pfit_premenop_constant_slope_fit_std <-plotHbFer()
+    } else if (!constant_slope & constant_std){
+      pfit_premenop_fit_slope_constant_std <- plotHbFer()
+    } else if (! constant_slope & ! constant_std){
+      pfit_premenop_fit_slope_fit_std <- plotHbFer()
+    }
+    if(export_files){
+      exportData(refdatapreF)
+      exportRollmean(rollmean_data)
+      exportSolution(sol_data)} 
+
+    ## set postmenopausal female dataset for reference
+    refdata<-select_postmenopausal_only()
+    refdata<-refdata[order(refdata$lFer),] # order data by lFer
+    refdatapostF<-refdata
+    fitdata<-refdata
+    title=paste0("Postmenopausal donors (n=", nrow(refdatapostF), ")", sep="")
+    print("Postmenopausal")
+    if(constant_slope & constant_std){
+      pfit_postmenop_constant_slope_constant_std <- plotHbFer()
+    }else if (constant_slope & ! constant_std){
+      pfit_postmenop_constant_slope_fit_std <-plotHbFer()
+    } else if (!constant_slope & constant_std){
+      pfit_postmenop_fit_slope_constant_std <- plotHbFer()
+    } else if (! constant_slope & ! constant_std){
+      pfit_postmenop_fit_slope_fit_std <- plotHbFer()
+    }
+    if(export_files){
+      exportData(refdatapostF)
+      exportRollmean(rollmean_data)
+      exportSolution(sol_data)}
+    }
+  }
+}
+
+```
+
+# Bootstrap results
+
+## Run bootstrap
+
+Bootstrap will run only if set to T in parameters.
+
+```{r}
+#| label: bootstraps
+
+
+MaleBootstrapResultFile<-paste0("bootstrap_results/", currentDate, "/Male_Bootstrap_",bootstrapsamples,"_samp_",bsseed, "seed.RDS")
+FemaleBootstrapResultFile<-paste0("bootstrap_results/", currentDate, "/Female_Bootstrap_",bootstrapsamples,"_samp_", bsseed, "seed.RDS")
+PremenopausalBootstrapResultFile<-paste0("bootstrap_results/", currentDate, "/Premenopausal_Bootstrap_",bootstrapsamples,"_samp_", bsseed, "seed.RDS")
+PostmenopausalBootstrapResultFile<-paste0("bootstrap_results/", currentDate, "/Postmenopausal_Bootstrap_",bootstrapsamples,"_samp_", bsseed, "seed.RDS")
+
+if(dobootstrap){
+  set.seed(bsseed)
+  if(printbootstrap){
+    print(paste("Doing", bootstrapsamples, "bootstraps"))
+    print(paste("seed =",bsseed))
+  }
+  
+
+  if(printbootstrap){
+    print('')
+    print("Males")
+    print('------------')
+    print(paste("STD is constant at", STD_CONSTANT))
+  }
+  refdataM<-select_males_only()
+  #Set STD from first fit on data (so don't fit it in bootstrap again)
+  #Does not influence other fit paramaters
+  STD_CONSTANT <<- tail(pfit_male_constant_slope_fit_std, n=1)
+  bsxm <- compute_bss(refdataM, pfit_male_constant_slope_constant_std,
+    pfit_male_fit_slope_constant_std, bootstrapsamples)
+
+  saveRDS(bsxm, file=MaleBootstrapResultFile)
+
+  if(printbootstrap){
+    print("Female")
+    print('------------')
+    print(paste("STD is constant at", STD_CONSTANT))
+  }
+  refdataF<-select_females_only()
+ 
+  STD_CONSTANT <<- tail(pfit_female_constant_slope_fit_std, n=1)
+  bsxf <- compute_bss(refdataF, pfit_female_constant_slope_constant_std,
+     pfit_female_fit_slope_constant_std, bootstrapsamples)
+  saveRDS(bsxf, file=FemaleBootstrapResultFile)
+
+  if(menopausal_status){
+    if(printbootstrap){
+      print("premenopause")
+      print('------------')
+      print(paste("STD is constant at", STD_CONSTANT))
+    }
+    refdatapreF<-select_premenopausal_only()
+    STD_CONSTANT <<- tail(pfit_premenop_constant_slope_fit_std, n=1)
+    bsxpref <- compute_bss(refdatapreF, pfit_premenop_constant_slope_constant_std,
+      pfit_premenop_fit_slope_constant_std, bootstrapsamples)
+
+    saveRDS(bsxpref, file=PremenopausalBootstrapResultFile)
+
+    if(printbootstrap){
+      print("postmenopause")
+      print('------------')
+      print(paste("STD is constant at", STD_CONSTANT))
+    }
+    refdatapostF<-select_postmenopausal_only()
+    STD_CONSTANT <<- tail(pfit_postmenop_constant_slope_fit_std, n=1)
+    bsxpostf <- compute_bss(refdatapostF, pfit_postmenop_constant_slope_constant_std,
+      pfit_postmenop_fit_slope_constant_std, bootstrapsamples)
+    saveRDS(bsxpostf, file=PostmenopausalBootstrapResultFile)
+  }
+}
+
+
+```
+
+## Plot bootstrap results
+
+```{r}
+#| label: plot bootstrap results
+
+if(file.exists(MaleBootstrapResultFile)){
+  
+  # Read bootstrap results
+  title=paste0("Male donors (n=", nrow(refdataM),")", sep="")
+  bsxm<-readRDS(MaleBootstrapResultFile)
+  plot_bootstraps(refdataM, bsxm, pfit_male_constant_slope_constant_std, pfit_male_fit_slope_constant_std)
+}
+
+if(file.exists(FemaleBootstrapResultFile)){
+  
+  # Read bootstrap results
+  title=paste0("Female donors (n=", nrow(refdataF),")", sep="")
+  bsxf<-readRDS(FemaleBootstrapResultFile)
+  plot_bootstraps(refdataF, bsxf, pfit_female_constant_slope_constant_std, pfit_female_fit_slope_constant_std)
+}
+if(menopausal_status){
+if(file.exists(PremenopausalBootstrapResultFile)){
+  
+  # Read bootstrap results
+  title=paste0("Premenopausal donors (n=", nrow(refdatapreF),")", sep="")
+  bsxpref<-readRDS(PremenopausalBootstrapResultFile)
+  plot_bootstraps(refdatapreF, bsxpref, pfit_premenop_constant_slope_constant_std, pfit_premenop_fit_slope_constant_std)
+}
+
+if(file.exists(PostmenopausalBootstrapResultFile)){
+  
+  # Read bootstrap results
+  title=paste0("Postmenopausal donors (n=", nrow(refdatapostF),")", sep="")
+  bsxpostf<-readRDS(PostmenopausalBootstrapResultFile)
+  plot_bootstraps(refdatapostF, bsxpostf, pfit_postmenop_constant_slope_constant_std, pfit_postmenop_fit_slope_constant_std)
+}
+}
+```
+
+# Exported data
+
+Below I've given a description of what we're exporting. If you've put T in the export_files indicator (line 130), the following files are exported:
+
+-   **export_data.rds:** this contains jittered lFer and dRefHb values and the sex of a proportion of your data (that you have defined)
+-   **rollmean_export.rds:** this contains 2 variables to make the rollmean line. The lFer values are jittered, sex is original, and the rollmean value is the mean of 500 records before and after a certain record so this will not contain original values.
+-   **sol_export.rds:** this contains 3 rows to plot the solution of the changepoint. There are no original values here.
+-   **llim_export.rds:** this contains 501 data points to make the upper limit of the changepoint solution. There are no original values here.
+-   **ulim_export.rds:** this contains 501 data points to make the lower limit of the changepoint solution. There are no original values here.
+-   **CIcp_export.rds:** this contains the changepoint and it's CI per sex. There are no original values here.
+
+Please send your exported data to Amber so we can make plots containing all 4 countries.
+
+Files are saved in a folder with the name of the dataset used for the analysis if you've named your datasets dataset1 to dataset6. If you've named them differently, the folder with results will be named after the start date of the analysis. If that is the case for you, to make it more clear for me when collecting all results: please change this to the name of the dataset you're using (dataset 1 to 6).

@@ -1,0 +1,53 @@
+---
+title: "Ferritin changepoint - Dataset descriptives"
+format: 
+    html:
+        embed-resources: true
+---
+
+# Initialization
+
+```{r}
+#| label: packages
+#| code-fold: true
+#| message: false
+#| warning: false
+
+library(table1)          # for producing the descriptives table
+library(dplyr)
+```
+
+## Define dataset
+
+```{r}
+#| label: dataset 
+
+FileToUse<-"~/Amber/Data/FerHb/2023-07-26/dataset3.rds" #define the dataset file you want to use for the descriptives table (1 of 6 datasets we agreed on)
+data <- readRDS(FileToUse) %>% mutate(dHb = Hb - RefHb)
+```
+
+# Descriptives
+## Whole dataset
+
+```{r}
+descriptives <- table1::table1(~  Hb + RefHb + dHb + Ferritine + factor(Donatiesoortcode) | factor(Geslacht), data = data, caption = "Dataset descriptives", render.continuous=c(.="Mean (SD)", .="Median [Q1, Q3]"), render.categorical=c(.="FREQ (PCT)"))
+descriptives
+```
+
+## Baseline
+
+I selected the "baseline" visits by selecting only the donation type "Nieuwe donorkeuring", but you may have to change that for your setting.
+
+```{r}
+descriptives2 <- table1::table1(~  RefHb + Ferritine + Leeftijd + factor(premenopausal) | factor(Geslacht), data = subset(data, data$Donatiesoortcode == "Nieuwe donorkeuring"), caption = "Dataset descriptives", render.continuous=c(.="Mean (SD)", .="Median [Q1, Q3]"), render.categorical=c(.="FREQ (PCT)"))
+descriptives2
+```
+
+## Follow-up
+
+I selected the "follow-up" visits by selecting only the donation type "Volbloed", but you may have to change that for your setting.
+
+```{r}
+descriptives3 <- table1::table1(~  Hb + RefHb + dHb + Ferritine | factor(Geslacht), data = subset(data, data$Donatiesoortcode == "Volbloed"), caption = "Dataset descriptives", render.continuous=c(.="Mean (SD)", .="Median [Q1, Q3]"), render.categorical=c(.="FREQ (PCT)"))
+descriptives3
+```

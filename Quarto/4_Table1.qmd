@@ -1,0 +1,73 @@
+---
+title: "Analysis of deltaHb - ferritin association (Table 1)"
+format: 
+    html:
+        embed-resources: true
+---
+
+# Initialization
+
+## Load packages
+
+```{r}
+#| label: libraries
+#| code-fold: true
+#| code-summary: Libraries
+#| message: false
+#| warning: false
+
+library("dplyr")
+library("table1")
+```
+
+## Load data
+
+```{r}
+#| label: define directory and data file
+
+FileToUse<-"~/Amber/Data/FerHb/2023-08-23b/dataset2.rds" #define the dataset file you want to use for the analysis (1 of 6 datasets we agreed on)
+data <- readRDS(FileToUse)
+```
+
+## Define variables
+
+```{r}
+#| label: select variables in the Table 1
+
+#i added this because not everyone might have the same variables as we do. Please check the lists below and adjust accordingly. It would be great if we could get most of the variables from every dataset.
+
+#for translations: KeyID = donor ID, Geslacht = sex, Lengte = height, Gewicht = weight, Leeftijd = age
+variables <- c("KeyID", "Geslacht", "Hb", "Ferritine", "Lengte", "Gewicht", "RefHb", "BMI", "Leeftijd", "LogFer", "DHb", "premenopausal")
+data <- data %>% select(variables) %>% mutate(premenopausal = as.factor(premenopausal))
+
+```
+
+# Descriptive tables
+
+## Males
+
+```{r}
+#| label: t1 males 
+malest1<- table1(~ Leeftijd + Lengte + Gewicht + BMI + Hb  + RefHb + DHb + Ferritine + LogFer , data = subset(data, data$Geslacht=="M"), caption = "Males", render.continuous=c(.="Mean (SD)", .="Median [Q1, Q3]"), render.categorical=c(.="FREQ (PCT)"))
+malest1
+```
+
+## Females
+```{r}
+#| label: t1 females 
+femalest1<- table1(~ Leeftijd + premenopausal + Lengte + Gewicht + BMI + Hb  + RefHb + DHb + Ferritine + LogFer , data = subset(data, data$Geslacht=="F"), caption = "Females", render.continuous=c(.="Mean (SD)", .="Median [Q1, Q3]"), render.categorical=c(.="FREQ (PCT)"))
+femalest1
+```
+
+## Premenopausal females
+```{r}
+#| label: t1 premenopausal females 
+prefemalest1<- table1(~ Leeftijd + Lengte + Gewicht + BMI + Hb  + RefHb + DHb + Ferritine + LogFer , data = subset(data, data$Geslacht=="F" & data$premenopausal == 1), caption = "Premenopausal females", render.continuous=c(.="Mean (SD)", .="Median [Q1, Q3]"), render.categorical=c(.="FREQ (PCT)"))
+prefemalest1
+```
+## Postmenopausal females
+```{r}
+#| label: t1 postmenopausal females 
+postfemalest1<- table1(~ Leeftijd + Lengte + Gewicht + BMI + Hb  + RefHb + DHb + Ferritine + LogFer , data = subset(data, data$Geslacht=="F" & data$premenopausal == 0), caption = "Postmenopausal females", render.continuous=c(.="Mean (SD)", .="Median [Q1, Q3]"), render.categorical=c(.="FREQ (PCT)"))
+postfemalest1
+```
