@@ -626,14 +626,14 @@ ggsave(FileName, width=6, height=4)
 
 ```{r}
 
-test <- data.frame(t(data.frame(c(NA,-100,-100,-100,"NL","  ", NA),c(NA,-100,-100,-100,"SA","  ", NA),c(NA,-100,-100,-100,"ENG","  ", NA),c(NA,-100,-100,-100,"USA","  ", NA))))
+test <- data.frame(t(data.frame(c(NA,-100,-100,-100,"NL","  ", NA),c(NA,-100,-100,-100,"SA","  ", NA),c(NA,-100,-100,-100,"FIN","  ", NA),c(NA,-100,-100,-100,"USA","  ", NA))))
 colnames(test) <- c("sex", "mean", "lower", "upper", "country", "changepoint", "sex.label")
 data2 <- rbind(data, test) %>% mutate(mean = as.numeric(mean), upper=as.numeric(upper), lower=as.numeric(lower))
 data2$n <- c("3,457","3,462", "1,590", "1,867", "217,144", "196,595", "78,521", "138,623", "196,082", "205,195", "46,714", "149,368", "19,697", "20,975", "9,084", "10,613", "100,616", "65,052","23,946", "76,670", NA, NA, NA, NA)
 
 p_2 <- 
   data2 |>
-  ggplot(aes(y = fct_relevel(country, "USA", "ENG", "SA", "NL", "FIN"))) + 
+  ggplot(aes(y = fct_relevel(country, "USA", "SA", "NL", "FIN", "ENG"))) + 
   theme_classic()+
   geom_linerange(aes(xmin=lower, xmax=upper, col = fct_relevel(sex.label, "Postmenopausal", "Premenopausal", "Female", "Male")), position = position_dodge(1))+
   scale_colour_manual('Sex', values = c("black", "black", "black", "black"), na.translate=F, breaks = c("Male", "Female", "Premenopausal", "Postmenopausal"))+
@@ -672,7 +672,7 @@ subset3 <-  rbind(data2, c(NA,NA,NA,NA, "Country", "Changepoint (95% CI)", "Male
 
 p_1 <-
   subset3 |>
-  ggplot(aes(y = fct_relevel(country, "USA", "ENG", "SA", "NL", "FIN", "Country")))+
+  ggplot(aes(y = fct_relevel(country, "USA", "SA", "NL", "FIN", "ENG", "Country")))+
   geom_text(aes(x = 1.7, label = country,col=fct_relevel(sex.label, "Postmenopausal", "Premenopausal", "Female", "Male")), 
             hjust = 0, 
             fontface = "bold", 
@@ -719,6 +719,15 @@ FolderName <-paste0("~/Amber/FerHb/results_export/", currentDate)
 dir.create(FolderName)
 FileName <- paste0(FolderName, "/forestplot_complete.png")
 ggsave(FileName, width=9, height=5)
+
+plotfinal <- p_1 + p_2 + plot_layout(design = layout)
+
+ggsave(filename = paste0("~/Amber/FerHb/results_export/", currentDate, "/forestplot_complete.eps"), width = 9, height = 5,
+       plot = print(plotfinal),
+       device = "eps")
+
+ggsave(filename = paste0("~/Amber/FerHb/results_export/", currentDate, "/forestplot_complete.pdf"), width = 9, height = 5,
+       plot = print(plotfinal))
 ```
 # Plots by sex and country
 
